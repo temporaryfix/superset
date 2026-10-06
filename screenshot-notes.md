@@ -4,7 +4,7 @@ These images show real web, Electron and iOS app screens in a disposable local d
 
 Web and desktop captures use GitLab source `4eea55d3f4197e6cf363980df2076e39bc606da5`, before the three review amendments in `f5f9389a4627f0e08ba6ab1ec65ad099d1f691b8`. The original generated schema migration from #8232 was applied unchanged to the disposable database; PostgreSQL 18 was used for local upstream migration compatibility. An existing account-shell test override supplied an isolated shell and demo-only credential configuration so the host could authenticate without reading an operator's shell profile or credential helper. It does not mock GitLab API responses or replace the app UI.
 
-Web is captured at 1440 CSS pixels wide; desktop at its normal development window size (1998×1248 screenshot pixels). Later desktop captures use a 1440×900 CSS viewport with the native window's pixel scale. Mobile uses a fresh iOS simulator at 402×874 points with an existing compatible dev-client shell loading the current JavaScript bundle. Mobile input goes through Maestro, desktop/web input through CDP mouse and keyboard events. Development buttons and menus identify the captures as development builds.
+Web is captured at 1440 CSS pixels wide. Desktop captures retain the native window pixel scale: the files are 2880×1800 or 3420×2136 pixels depending on the capture. Mobile uses a fresh iOS simulator at 402×874 points (1206×2622 screenshot pixels) with an existing compatible dev-client shell loading the current JavaScript bundle. Mobile input goes through Maestro, desktop/web input through CDP mouse and keyboard events. Development buttons and menus identify the captures as development builds.
 
 ## What was observed
 
