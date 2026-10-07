@@ -8,6 +8,7 @@
  * to a path, port or key is one edit in this file and the bundle hash moves.
  */
 import { z } from "zod";
+import { parseGitRemote } from "./git-remote";
 
 /** Bumped when a box booted on the previous contract can no longer be driven. */
 export const SANDBOX_CONTRACT_VERSION = 1;
@@ -125,19 +126,72 @@ export const SANDBOX_ROOT_CHECKOUT = ".";
  * One checkout on the box; `path` is relative to the workspace root, or
  * `SANDBOX_ROOT_CHECKOUT` for the root itself.
  */
-export const sandboxRepositorySchema = z.object({
-	url: z.string().url(),
-	/** The branch the checkout ends up on: work happens here, never on the base. */
-	branch: z.string().min(1),
-	/**
-	 * The remote branch `branch` is cut from. Absent means `branch` is itself
-	 * the base, and the checkout tracks it instead of branching off it.
-	 */
-	baseBranch: z.string().min(1).optional(),
-	path: z.string().regex(/^(\.|[A-Za-z0-9_-][A-Za-z0-9._-]*)$/),
-	/** True for the repository whose `.superset/config.json` the box acts on. */
-	hooks: z.boolean().optional(),
-});
+export const sandboxRepositorySchema = z.preprocess(
+	(value, context) => {
+		if (
+			value &&
+			typeof value === "object" &&
+			"provider" in value &&
+			value.provider === "gitlab" &&
+			"url" in value &&
+			typeof value.url === "string" &&
+			(/[\s\\]/.test(value.url) ||
+				Array.from(value.url).some(
+					(character) =>
+						character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+				))
+		) {
+			context.addIssue({
+				code: "custom",
+				path: ["url"],
+				message: "Invalid claimed GitLab clone URL",
+			});
+		}
+		return value;
+	},
+	z
+		.object({
+			provider: z.literal("gitlab").optional(),
+			url: z.string().url(),
+			/** The branch the checkout ends up on: work happens here, never on the base. */
+			branch: z.string().min(1),
+			/**
+			 * The remote branch `branch` is cut from. Absent means `branch` is itself
+			 * the base, and the checkout tracks it instead of branching off it.
+			 */
+			baseBranch: z.string().min(1).optional(),
+			path: z.string().regex(/^(\.|[A-Za-z0-9_-][A-Za-z0-9._-]*)$/),
+			/** True for the repository whose `.superset/config.json` the box acts on. */
+			hooks: z.boolean().optional(),
+		})
+		.superRefine((repository, context) => {
+			if (repository.provider !== "gitlab") return;
+			const remote = parseGitRemote(repository.url);
+			const host = remote?.host ?? "";
+			if (
+				!remote ||
+				remote.provider === "github" ||
+				/^\d+(?:\.\d+){3}$/.test(host) ||
+				host.length > 253 ||
+				!host
+					.split(".")
+					.every((label) =>
+						/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label),
+					) ||
+				/[\s\\%?#:]/.test(`${remote.owner}/${remote.name}`) ||
+				`${remote.owner}/${remote.name}`
+					.split("/")
+					.some((part) => part === "." || part === "..") ||
+				repository.url !== `${remote.url}.git`
+			) {
+				context.addIssue({
+					code: "custom",
+					path: ["url"],
+					message: "Invalid claimed GitLab clone URL",
+				});
+			}
+		}),
+);
 export const sandboxRepositoriesSchema = z
 	.array(sandboxRepositorySchema)
 	.min(1);
@@ -202,12 +256,40 @@ export function renderSandboxConf(identity: SandboxIdentity): string {
 	return renderShellAssignments(sandboxIdentitySchema.parse(identity));
 }
 
+export function sandboxAssetBaseURL(cdnURL?: string): string {
+	if (cdnURL === undefined) return SANDBOX_ASSET_BASE_URL;
+	if (/[^\x21-\x7e]/.test(cdnURL)) throw new Error("Invalid sandbox CDN URL");
+	const match = /^https:\/\/([a-z0-9.-]+)(?::([0-9]+))?(\/.*)?$/i.exec(cdnURL);
+	const host = match?.[1];
+	const port = match?.[2];
+	const path = match?.[3] ?? "";
+	if (
+		!host ||
+		host.length > 253 ||
+		host.toLowerCase() === "localhost" ||
+		/^\d+(?:\.\d+){3}$/.test(host) ||
+		!host
+			.split(".")
+			.every((label) =>
+				/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label),
+			) ||
+		(port !== undefined && (Number(port) < 1 || Number(port) > 65535)) ||
+		!/^(?:\/[a-z0-9._~-]+)*\/?$/i.test(path) ||
+		path.split("/").some((segment) => segment === "." || segment === "..")
+	)
+		throw new Error("Invalid sandbox CDN URL");
+	const url = new URL(cdnURL);
+	if (url.hostname !== host.toLowerCase())
+		throw new Error("Invalid sandbox CDN URL");
+	return `${url.origin}${path.replace(/\/$/, "")}/sandbox`;
+}
+
 /**
  * The shell-visible half of this module. Rendered into
  * `rootfs/etc/superset/contract.sh` at build so `superset-boot` and the steps
  * read the same names the API and host-service use.
  */
-export function renderContractShell(): string {
+export function renderContractShell(cdnURL?: string): string {
 	return renderShellAssignments({
 		SUPERSET_CONTRACT_VERSION: SANDBOX_CONTRACT_VERSION,
 		SUPERSET_USER: SANDBOX_USER,
@@ -235,6 +317,6 @@ export function renderContractShell(): string {
 		SUPERSET_DISPLAY_HEIGHT: SANDBOX_DISPLAY.height,
 		SUPERSET_DISPLAY_DEPTH: SANDBOX_DISPLAY.depth,
 		SUPERSET_DISPLAY_DPI: SANDBOX_DISPLAY.dpi,
-		SUPERSET_ASSET_BASE_URL: SANDBOX_ASSET_BASE_URL,
+		SUPERSET_ASSET_BASE_URL: sandboxAssetBaseURL(cdnURL),
 	});
 }

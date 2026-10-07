@@ -4,6 +4,8 @@
 	"private": true,
 	"type": "module",
 	"exports": {
+		"./git-remote": "./src/git-remote.ts",
+		"./repo-identity": "./src/repo-identity.ts",
 		"./terminal-colors": "./src/terminal-colors.ts",
 		"./voice": {
 			"types": "./src/voice/index.ts",
@@ -384,7 +386,22 @@
 		"./page-storage-ticket": {
 			"types": "./src/page-storage-ticket.ts",
 			"default": "./src/page-storage-ticket.ts"
-		}
+		},
+		"./optional-auth-providers": {
+			"types": "./src/optional-auth-providers.ts",
+			"default": "./src/optional-auth-providers.ts"
+		},
+		"./redis-url": "./src/redis-url.ts",
+		"./self-host-queue": "./src/self-host-queue.ts",
+		"./optional-analytics": {
+			"types": "./src/optional-analytics.ts",
+			"default": "./src/optional-analytics.ts"
+		},
+		"./kv": {
+			"types": "./src/kv.ts",
+			"default": "./src/kv.ts"
+		},
+		"./billing-env": "./src/billing-env.ts"
 	},
 	"scripts": {
 		"clean": "git clean -xdf .cache .turbo dist node_modules",
@@ -401,7 +418,9 @@
 		"jose": "6.2.2",
 		"rrule": "2.8.1",
 		"semver": "7.7.4",
-		"zod": "4.6.5"
+		"zod": "4.6.5",
+		"@upstash/redis": "1.37.0",
+		"ioredis": "5.11.1"
 	},
 	"devDependencies": {
 		"@superset/typescript": "workspace:*",
@@ -410,6 +429,7 @@
 		"@types/semver": "7.7.1",
 		"@xterm/xterm": "6.1.0-beta.302",
 		"bun-types": "1.4.2",
-		"typescript": "7.0.2"
+		"typescript": "7.0.2",
+		"@upstash/ratelimit": "2.0.8"
 	}
 }

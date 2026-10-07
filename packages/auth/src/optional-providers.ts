@@ -1,0 +1,36 @@
+type ProviderEnv = {
+	AUTHENTIK_ISSUER?: string;
+	AUTHENTIK_CLIENT_ID?: string;
+	AUTHENTIK_CLIENT_SECRET?: string;
+	GITLAB_CLIENT_ID?: string;
+	GITLAB_CLIENT_SECRET?: string;
+	GITLAB_ISSUER?: string;
+};
+export function getGitlabProvider(config: ProviderEnv) {
+	return config.GITLAB_CLIENT_ID?.trim() && config.GITLAB_CLIENT_SECRET?.trim()
+		? {
+				gitlab: {
+					clientId: config.GITLAB_CLIENT_ID,
+					clientSecret: config.GITLAB_CLIENT_SECRET,
+					...(config.GITLAB_ISSUER ? { issuer: config.GITLAB_ISSUER } : {}),
+				},
+			}
+		: {};
+}
+
+export function getAuthentikConfig(config: ProviderEnv) {
+	return config.AUTHENTIK_ISSUER?.trim() &&
+		config.AUTHENTIK_CLIENT_ID?.trim() &&
+		config.AUTHENTIK_CLIENT_SECRET?.trim()
+		? [
+				{
+					providerId: "authentik",
+					clientId: config.AUTHENTIK_CLIENT_ID,
+					clientSecret: config.AUTHENTIK_CLIENT_SECRET,
+					discoveryUrl: `${config.AUTHENTIK_ISSUER.replace(/\/$/, "")}/.well-known/openid-configuration`,
+					scopes: ["openid", "profile", "email"],
+					pkce: true,
+				},
+			]
+		: [];
+}
