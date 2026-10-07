@@ -1,55 +1,58 @@
-# Self-host capabilities: source-based visual overview
+# Self-host capabilities and completion evidence
 
-This is an explanatory diagram and source guide for [PR #8237](https://github.com/superset-sh/superset/pull/8237), with the desktop storage policy in [#8231](https://github.com/superset-sh/superset/pull/8231) and development database guidance in [#8233](https://github.com/superset-sh/superset/pull/8233). It is **not a runtime screenshot or an operational architecture acceptance report**. Arrows describe configurable source contracts; they do not claim that services were deployed or connected.
+The one-commit combined source on [review/verified-composition-20261007](https://github.com/temporaryfix/superset/tree/review/verified-composition-20261007) ([ef1ac91f](https://github.com/temporaryfix/superset/commit/ef1ac91f4632f7ed26f822d80e787d3adac41e3f)) integrates all seven proposals for reproduction without another PR. Shared graph evidence applies to that composition; focused proposal checks are recorded separately.
+
+[PR #8237](https://github.com/superset-sh/superset/pull/8237) adds optional service adapters and local client tooling. [#8231](https://github.com/superset-sh/superset/pull/8231) supplies configured desktop storage origins; [#8233](https://github.com/superset-sh/superset/pull/8233) documents PostgreSQL development storage and rollback. [Tracking issue #8241](https://github.com/superset-sh/superset/issues/8241) links the related review work and original app gallery.
+
+One-commit self-host candidate `97aaeb4ea39e09f70f021743fe6417cb50be6049` targets upstream `2dda82c314606aaa099b8626150c61450d66b629`. The optional adapters preserve the managed-provider path when disabled. Private page/file objects and public avatar/logo objects use separate buckets. The diagram describes the implemented configuration and request contracts; actual acceptance results follow it.
 
 ```mermaid
 flowchart LR
-  Clients["Existing desktop, web and mobile clients"] --> Auth["Optional Authentik OAuth"]
-  Clients --> API["Existing API and tRPC routes"]
+  Clients["Desktop, web and iOS clients"] --> Auth["Configured optional sign-in providers"]
+  Clients --> API["API and tRPC"]
   API --> DB["Opt-in native PostgreSQL"]
-  API --> KV["Opt-in Redis KV and job publication"]
-  KV --> Jobs["Queue and scheduler services"]
-  API --> Private["Private S3 bucket: pages and files"]
-  API --> Public["Separate public S3 bucket: avatars and logos"]
-  Clients --> Content["Existing usercontent ticket and visibility routes"]
+  API --> KV["Opt-in Redis KV"]
+  API --> Queue["Durable queue and scheduler"]
+  Queue --> API
+  API --> Private["Private S3: pages and files"]
+  API --> Public["Separate public S3: avatars and logos"]
+  Clients --> Content["Usercontent ticket and visibility routes"]
   Content --> Private
-  Clients --> Realtime["Realtime Worker: organization and page channels"]
+  Clients --> Realtime["Realtime Worker"]
   Realtime --> Private
-  Clients --> Relay["Relay Worker: placement and host tunnels"]
-  Relay --> Hosts["Existing host service"]
+  Clients --> Relay["Relay Worker and persistent placement"]
+  Relay --> Host["Host service"]
   Tools["Local client build and packaging tools"] --> Clients
-  Tools --> Evidence["Artifact evidence; publication acceptance remains false"]
-  Docs["Self-host setup and acceptance documentation"] -.-> API
-  Docs -.-> Content
-  Docs -.-> Relay
-  Docs -.-> Tools
+  Tools --> Evidence["Artifact manifest and target acceptance"]
 ```
 
-The optional adapters preserve the existing managed-provider path when disabled. The private/public storage split is deliberate: page and file reads keep the existing ticket/visibility checks, while avatar/logo objects use the separate public store. The diagram groups components by responsibility rather than prescribing a complete Compose or ingress deployment.
+## Resulting behavior
 
-## What changed in source
-
-| Capability | Reviewable behavior | Public source |
+| Capability | Completion behavior | Concrete check |
 |---|---|---|
-| PostgreSQL | Native driver selection is opt-in; the review fix uses the direct connection URL. Read normalization supports both native arrays and Neon envelopes. | [DB client](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/packages/db/src/client.ts), [maintenance script](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/packages/trpc/scripts/align-default-statuses.ts) |
-| Redis and jobs | Optional Redis-backed KV and native job publication, plus separate queue/scheduler services. Bounded draining and Slack enqueue timing remain review follow-ups. | [KV adapter](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/packages/shared/src/kv.ts), [job image guide](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/docs/self-host/JOBS_IMAGES.md) |
-| S3 and image cleanup | Generic S3 adapters separate private page/file content from public avatars/logos. Replacement retains the old object until the new row is saved; failed saves reclaim the new object. Cleanup lifetime and retained-key rotation still need follow-up. | [Storage guide](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/docs/self-host/STORAGE.md), [replacement lifecycle](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/packages/trpc/src/lib/upload.ts) |
-| Usercontent and realtime | Self-host wrappers preserve the actual existing Worker routes and ticket/visibility contracts, adding a signed read-only private S3 adapter. Real workerd persistence and WebSocket acceptance remain separate. | [Usercontent entry](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/docker/self-host/usercontent-entry.js), [realtime guide](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/docs/self-host/REALTIME.md) |
-| Relay | A separate Worker image retains host tunnel routes and adds persistent placement storage configuration. The actual prune already supplies install patches. | [Relay guide](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/docs/self-host/RELAY.md), [image](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/docker/self-host/relay.Dockerfile) |
-| Optional OAuth and analytics | Optional Authentik actions appear in existing sign-in surfaces. Analytics can be configured or disabled. Mobile capability/button alignment and quiet feature-hook opt-out still need follow-up. | [Optional provider contract](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/packages/auth/src/optional-providers.ts), [mobile sign-in screen](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/apps/mobile/screens/%28auth%29/sign-in/SignInScreen.tsx) |
-| Client tooling and maintenance | Local launchers invoke existing build commands, validate public build inputs, and record artifact evidence without publication. Pushed packaged-runtime fixes retain native probes and mark foreign/other universal slices pending. Unused helper cleanup is a separate low-priority review item. | [Client guide](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/docs/self-host/CLIENT_RELEASE.md), [launcher](https://github.com/superset-sh/superset/blob/c321235d278eb1fec4d5a50b5fcfd46602703c43/scripts/client-packaging/client-packaging.ts) |
+| Native PostgreSQL | Uses the direct unpooled URL. Maintenance scripts normalize native-array and Neon-envelope results. | Actual native exports execute queries, commit/roll back transactions and serialize advisory locks. The combined-source DB package passed 35 cases/212 assertions with zero skips/failures. Status-repair fixtures also cover dry-run/apply for both result shapes. |
+| Redis and queue | Redis configuration accepts redis/rediss schemes. Publication commits durable SQLite storage before acknowledgement. Four workers refill freed slots; token-fenced leases prevent stale acknowledgements changing new claims. Exhaustion and failure callback insertion commit together. | Actual pinned Valkey passed seven cases/69 assertions with zero skips/failures: five native cases made zero HTTP requests and two managed-provider cases passed. Queue regressions cover fast-job refill behind a slow job, concurrent claims, expired lease recovery, stale acknowledgements, locked writes and callback recovery. Native Slack publication uses a two-second acknowledgement deadline. |
+| Public/private storage | Private reads/presigning keep their bucket boundary; images explicitly use the separate public bucket. Image replacement saves the row before reclaiming the old image and awaits cleanup. A failed save awaits reclamation of the new upload. Deletion concurrency is bounded to four. | Deferred cleanup/save-failure fixtures, public/private SDK command assertions and bounded deletion transport tests passed. Generic S3 repointing emits the original public object URL. |
+| Garage credential retention | Existing keys must match supplied credentials before policy reconciliation. Private/public aliases must resolve to different buckets. Documented rotation uses a new key. | Real pinned Garage v2 cases passed for new key, retained matching key, mismatched-key refusal and new-key rotation. |
+| Worker configuration | Usercontent/realtime/relay renderers validate origins, ticket secrets and bounded exact-IP private exceptions. Config output is private, fsynced and atomically replaced. Relay refuses template/output aliases before persistent writes. | Endpoint query/fragment and 31/32-character ticket-secret regressions passed; additional alias, filesystem-error and malformed-port cases passed. |
+| Worker images | The configurable runner base explicitly requires Debian Node 24 and UID/GID tools. Existing relay prune patches and workerd selector contracts remain intact. | A pinned Debian Node 24 remap passed. A scratch context image retained eight allowed dummy files/templates and excluded 15 credential/state sentinels; removing the ignore rule made its negative control fail. |
+| Optional auth and analytics | Configured provider actions and Apple capability share the mobile provider list. Blank Authentik credentials disable that provider. Sign-in content scrolls when provider rows exceed available space. Analytics opt-out produces no client, request or warning; configured flags retain their actual SDK behavior. | Actual provider/action fixtures cover hosted defaults, blank/unknown inputs, selected providers and all five supported mobile providers with development controls. Configured, disabled and unknown flag cases passed using the actual quiet wrapper; combined mobile fixtures passed 38 outer cases, and auth/config fixtures passed 41 outer plus 90 genuine app-config cases. |
+| Billing disabled | Unconfigured billing disables subscription operations, returns neutral billing reads and explicitly refuses portal creation. Stored customer IDs cannot trigger Stripe through organization or member lifecycle. Team admission no longer requires an unavailable upgrade. | Ten actual router/hook/plugin cases passed: disabled retained-customer paths made zero SDK calls; configured reads/portal and lifecycle calls remained active. |
+| Build inputs and packaging | Runtime secrets pass through without invalidating unrelated cached artifacts. Public mobile output settings affect mobile task hashes; Apple association inputs affect the web build. Child output resolves after stream closure. CLI staging requires nonempty essential runtimes, addons, helpers and migrations. Packaged-module containment handles Windows/POSIX paths. | Real Turbo dry-run hash comparisons, grandchild stdout/JSON-tail drainage, precise truncation regressions and serialized containment probes passed. Foreign target/native slices retain explicit target-runtime acceptance. |
+| Expo Swift interop | Faithful three-file Bun backport of [official Expo fix #51040](https://github.com/expo/expo/pull/51040) to pinned ExpoModulesJSI 57.1.1: private constructors, retained factories and pointer-capture wrappers. Existing retain/release bodies and SDK versions remain intact. | Genuine installed package passed one native case/19 assertions: Swift header import, C++ dispatch/retain-release, escaped copied Swift owners in both `-Onone` and `-O` with AddressSanitizer. Incorrect-unretained control compiled but failed the ownership assertion. |
 
-The links above identify the current amended public source. Pushed corrections are summarized in [review-feedback.md](review-feedback.md), including their exact review heads and focused validation. This overview adds no endpoints, account identifiers, infrastructure inventory, or credential values.
+## Acceptance evidence
 
-## What real screenshots can demonstrate
+Actual native PostgreSQL acceptance exercises both exported clients against disposable PostgreSQL: query execution, committed/rolled-back transactions and advisory-lock serialization passed. The combined-source DB package passed 35 cases/212 assertions with zero skips/failures. The focused queue, billing, auth, storage/configuration and packaging tests execute their actual router/hooks/components or command boundaries with controlled transports and dummy credentials.
 
-| Surface | Honest visual claim | Acceptance that remains separate |
-|---|---|---|
-| Existing web sign-in/sign-up and desktop sign-in | A configured Authentik action renders in the existing screen; show the actual pending/error state only if exercised. | Completed OAuth, callback/deep-link handling, persisted sessions. |
-| Existing mobile sign-in | The configured provider actions render in the actual app build. Caption any unsupported visible action as a review defect. | Native entitlements, physical-device authentication, Release launch. |
-| Existing avatar/logo and page/file views | A fixture image or document renders after an action actually completed. | Private-bucket denial, signature/CORS behavior, ticket isolation, cleanup and persistence. |
-| Terminal/configuration output | An actual local check completed, with its command, source head, target and observed result shown. Label static configuration and diagrams accordingly. | Server deployment, live connectivity, native packaging, signing, update installation. |
+Actual pinned Valkey acceptance passed seven cases/69 assertions with zero skips/failures in 427 ms. The five native cases used the actual service and verified Upstash-compatible serialization, TTL, conditional set, GET/delete, 16 concurrent reads/writes and `NOSCRIPT` recovery without HTTP calls. Twelve rate-limit calls admitted exactly three; two managed-provider cases passed. The disposable container was removed.
 
-If a loopback flag-response fixture is used to reveal the cloud chooser or editor, label the capture **fixture flags only**. It demonstrates the actual client UI under supplied flag responses; it does not prove access to a real flag service, cloud provisioning, paid workspace creation, or backend cloud authorization.
+The candidate usercontent image built in 49.4 seconds; Garage v2 Worker acceptance passed all three cases/49 assertions: public-page access, unauthorized/private ticket refusal and file/range access. The matching nondefault ticket secret included literal equals and meaningful whitespace. Runtime UID 1001 was verified, and all seven owned resources were absent after cleanup.
 
-Most changes are backend adapters, configuration, packaging and documentation. There is no new general self-host administration screen in this PR. Existing app screens can illustrate the configured client; a rendered screen alone cannot verify PostgreSQL, Redis, storage, relay or release acceptance.
+The installed Expo 57.1.1 native fixture checks explicit retained factory ownership rather than deleting annotations: two copied owners survive the original factory scope and produce exactly two allocations/destructions in each Swift optimization mode. C++/Swift AddressSanitizer and the incorrect-unretained negative control verify the ownership boundary. Supported full SDK 57 builds use [Xcode 26.4+](https://docs.expo.dev/versions/v57.0.0/#support-for-android-and-ios-versions), as documented by the client release tooling.
+
+Final focused self-host checks: Final combined graph: all 42 compiler/declaration/catalog tasks passed; full lint passed 9,927 files. Exact self-host candidate Docker build and real Garage/Worker acceptance passed three cases/49 assertions; all seven owned resources were removed. Actual native PostgreSQL query/transaction/lock cases, Valkey native/managed cases, queue/storage/billing/provider fixtures and real Swift/ASan ownership checks passed. The source-only composition linked in #8241 reproduces shared optional-provider contracts.. Combined consumer/declaration/catalog checks: All 42 compiler/declaration/catalog tasks passed, with 17 fully translated shipping catalogs (6,184 messages each); repository-wide lint passed 9,927 files. Changed-test acceptance across all 17 groups passed 2290 cases with zero unresolved failures, including API 185, desktop 290, mobile 102, host 696 and tRPC 399. The native Node 22 worker and installed glab cases ran; all five optional native Redis cases also passed separately against disposable Valkey (seven total Redis cases/69 assertions, zero skips). Counts are outer cases; nested caller/component cases are recorded separately.. The single shared external-acceptance/provenance statement is in [tracking issue #8241](https://github.com/superset-sh/superset/issues/8241).
+
+## Visual walkthrough
+
+The [24 original app captures](README.md#full-visual-gallery) show configured GitLab client surfaces, with [capture provenance](screenshot-notes.md). Most self-host changes affect adapters, configuration and artifacts rather than adding an administration screen; the actual service/ownership checks above establish those capabilities.
